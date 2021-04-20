@@ -22,9 +22,12 @@ library(dplyr)
 library(stringr)
 library(ggplot2)
 library(kfigr)
+library(lubridate)
 ```
 
 ```{r read-data}
+# Read the counts table, a.k.a. "feature-table.tsv", a wide matrix with counts for each sequence
+# in each sample.
 counts <- read_delim(
   "data/seminar_01_mark_dopson_16s/feature-table.tsv", "\t", 
   escape_double = FALSE, trim_ws = TRUE,
@@ -38,9 +41,14 @@ counts <- read_delim(
 
 samples <- read_csv(
   'data/seminar_01_mark_dopson_16s/metadata.csv',
+  # If there had been a date for all rows, the below would have worked. Sometimes the field was 'ref' though.
   #col_types = cols(.default = col_character(), date = col_date(format = "%d/%m/%Y"), ph = col_double())
+  # Read the date column as character
   col_types = 'cccccd'
-)
+) %>%
+  # I convert the date here instead. The 'quiet = TRUE' is to avoid complaints from the six rows that doesn't
+  # have a date but 'ref'.
+  mutate(date = dmy(date, quiet = TRUE))
 
 taxonomy <- read_tsv(
   'data/seminar_01_mark_dopson_16s/taxonomy.tsv',
