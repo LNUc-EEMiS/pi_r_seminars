@@ -1,0 +1,75 @@
+---
+title: "Seminar 1"
+author: "DL"
+date: '2021-04-20'
+output: 
+  html_document:
+    toc: yes
+    toc_float:
+      collapse: no
+    fig_caption: yes
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.path='figures/')
+```
+
+```{r libraries, include = FALSE}
+library(readr)
+library(tidyr)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(kfigr)
+```
+
+```{r read-data}
+counts <- read_delim(
+  "data/seminar_01_mark_dopson_16s/feature-table.tsv", "\t", 
+  escape_double = FALSE, trim_ws = TRUE,
+  col_types = cols(.default = col_integer(), seqid = col_character())
+) %>%
+  pivot_longer(2:64, names_to = 'sample', values_to = 'count') %>%
+  filter(count > 0) %>%
+  group_by(sample) %>%
+  mutate(relab = count/sum(count)) %>%
+  ungroup()
+
+samples <- read_csv(
+  'data/seminar_01_mark_dopson_16s/metadata.csv',
+  #col_types = cols(.default = col_character(), date = col_date(format = "%d/%m/%Y"), ph = col_double())
+  col_types = 'cccccd'
+)
+
+taxonomy <- read_tsv(
+  'data/seminar_01_mark_dopson_16s/taxonomy.tsv',
+  col_types = 'ccd'
+) %>%
+  mutate(taxon = str_remove_all(taxon, 'D_[0-9]__')) %>%
+  separate(
+    taxon, 
+    c('domain', 'phylum', 'class', 'order', 'family', 'genus', 'species'), 
+    sep = ';',
+    fill = 'right'
+  )
+```
+
+# Introduction
+
+# Materials & Methods
+
+# Results
+
+Write something (`r figr('topphyla-plot', T, type = 'Figure')`).
+
+```{r topphyla-plot, fig.cap = '**Relative abundances of phyla larger than 5%.**'}
+counts %>%
+  inner_join(taxonomy, by = 'seqid') %>%
+  group_by(sample, phylum) %>%
+  summarise(relab = sum(relab), .groups = 'drop') %>%
+  filter(relab > 0.05) %>%
+  ggplot(aes(x = sample, y = relab, fill = phylum)) +
+  geom_col() +
+  coord_flip()
+```
