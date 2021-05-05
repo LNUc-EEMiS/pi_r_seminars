@@ -1,0 +1,121 @@
+---
+title: "Seminar 2"
+author: "DL"
+date: '2021-05-04'
+output: 
+  html_document:
+    toc: yes
+    toc_float:
+      collapse: no
+    fig_caption: yes
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.path='figures/')
+```
+
+```{r libraries, include = FALSE}
+library(readr)
+library(tidyr)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(kfigr)
+library(lubridate)
+```
+
+```{r read-data}
+# Read the counts table, a.k.a. "feature-table.tsv", a wide matrix with counts for each sequence
+# in each sample.
+counts <- read_delim(
+  "data/seminar_02_mark_dopson_16s/feature-table.tsv", "\t", 
+  escape_double = FALSE, trim_ws = TRUE,
+  col_types = cols(.default = col_integer(), seqid = col_character())
+) %>%
+  pivot_longer(2:64, names_to = 'sample', values_to = 'count') %>%
+  filter(count > 0) %>%
+  group_by(sample) %>%
+  mutate(relab = count/sum(count)) %>%
+  ungroup()
+
+samples <- read_csv(
+  'data/seminar_02_mark_dopson_16s/metadata.csv',
+  # If there had been a date for all rows, the below would have worked. Sometimes the field was 'ref' though.
+  col_types = 'cccccd'
+) %>%
+  # I convert the date here instead. The 'quiet = TRUE' is to avoid complaints from the six rows that doesn't
+  # have a date but 'ref'.
+  mutate(date = dmy(date, quiet = TRUE))
+
+taxonomy <- read_tsv(
+  'data/seminar_02_mark_dopson_16s/taxonomy.tsv',
+  col_types = 'ccd'
+) %>%
+  # Get rid of the leading "D_n__" for each rank
+  mutate(taxon = str_remove_all(taxon, 'D_[0-9]__')) %>%
+  separate(
+    taxon, 
+    c('domain', 'phylum', 'class', 'order', 'family', 'genus', 'species'), 
+    sep = ';',
+    fill = 'right'
+  )
+```
+
+```{r}
+top10phyla <- counts %>%
+  inner_join(taxonomy, by = 'seqid') %>%
+  group_by(phylum, sample) %>%
+  summarise(relab = sum(relab), .groups = 'drop_last') %>%
+  summarise(relab = mean(relab), .groups = 'drop') %>%
+  slice_max(relab, n = 10)
+```
+
+# Introduction
+
+## Sub intro
+
+# Materials & Methods
+
+# Results
+
+Write something (`r figr('topphyla-plot', T, type = 'Figure')`).
+
+```{r topphyla-plot, fig.cap = '**Relative abundances of phyla larger than 5%.**'}
+counts %>%
+  inner_join(taxonomy, by = 'seqid') %>%
+  group_by(sample, phylum) %>%
+  summarise(relab = sum(relab), n_asvs = n(), .groups = 'drop') %>%
+  inner_join(top10phyla %>% select(phylum), by = 'phylum') %>%
+  ggplot() + 
+  geom_col(aes(x = sample, y = relab, fill = phylum)) +
+  coord_flip()
+```
+
+```{r per-site-proteobacteria-distribution-plot}
+# Start with the taxonomy table
+taxonomy %>%
+  # That we subset to Proteobacteria
+  filter(phylum == 'Proteobacteria') %>%
+  # Join in counts and samples
+  inner_join(counts, by = 'seqid') %>%
+  inner_join(samples, by = 'sample') %>%
+  # Sum relative abundance over samples, then take the mean over replicates
+  # After group_by and summarise, only variables in either of the two functions remain
+  group_by(sample, class, site, depth, ph, rep) %>%
+  summarise(relab = sum(relab), .groups = 'drop_last') %>%
+  summarise(relab = mean(relab), .groups = 'drop') %>%
+  # Pass the data to ggplot
+  ggplot() +
+  # Render as a boxplot
+  geom_boxplot(aes(x = site, y = relab)) +
+  # On top of the boxes, plot all sites and depths, colour by depth
+  geom_point(aes(x = site, y = relab, colour = depth)) +
+  # Make the y-axis logarithmic
+  scale_y_log10() +
+  # Chose a different colour scale
+  scale_colour_brewer(palette = 'Paired') +
+  # Make one subplot per class
+  facet_wrap(~ class)
+```
+
