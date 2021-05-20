@@ -1,0 +1,135 @@
+---
+title: 'PI seminar number 3: Microarray data'
+author: "DL"
+date: '2021-05-18'
+output:
+  html_document:
+    toc: yes
+    toc_float:
+      collapse: no
+    fig_caption: yes
+    code_folding: hide
+  pdf_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.path='figures/', cache = TRUE)
+```
+
+```{r libraries, include = FALSE}
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(kfigr) # For the figr() function
+```
+
+```{r read-data}
+# The below is quite convoluted. A much simpler solution would have been to just make sure the input tables were nicely formated for R.
+
+# Read the sheet called "SMALL_DATA" (experiment); specify a range to avoid extra header rows.
+small <- read_excel(
+  "data/seminar_03_rachel_foster_microarray/DATA_RF_Rstudio.xlsx",
+  sheet = "SMALL_DATA", 
+  range = "A4:G401"
+) %>%
+  # Rename columns that will be sample names; note that there are two types of measurements: normalized abundance and number of detected
+  rename(
+    norm_10441 = `258493810002_1_2...2`, norm_10442 = 3, norm_10443 = 4,
+    ndet_10441 = 5, ndet_10442 = 6, ndet_10443 = 7
+  ) %>%
+  # Make the table long, i.e. place the "norm_10441" labels in one column and the values in another.
+  pivot_longer(2:7, names_to = 'n', values_to = 'v') %>%
+  # Split the type of measurement and sample name
+  separate(n, c('meas', 'sample'), sep = '_') %>%
+  # Make the table a little wider, so each row has four columns: Probe ID, sample, norm and ndet
+  pivot_wider(names_from = meas, values_from = v)
+
+# Read the second sheet "BIG_DATA" that contains measurements from the South China Sea
+big <- read_excel(
+  "data/seminar_03_rachel_foster_microarray/DATA_RF_Rstudio.xlsx",
+  sheet = "BIG_DATA", 
+  range = "A9:V363"
+) %>%
+  # We only read the part that contains normalized values, make it long
+  pivot_longer(2:ncol(.), names_to = 'sample', values_to = 'norm')
+
+# Read sample data from "BIG_DATA". This is tricky because these values are associated with columns and hence turned 90 degrees,
+# having named rows with values.
+samples <- read_excel(
+  "data/seminar_03_rachel_foster_microarray/DATA_RF_Rstudio.xlsx",
+  sheet = "BIG_DATA", 
+  range = "A4:V9",
+  col_names = c('name', paste('v', 1:21, sep = '_')) # Column names: name followed by v_1 to v_21
+) %>%
+  # The above returns a "tibble", a sort of data.frame that can't have "rownames". To do what I aim to here, we need rownames,
+  # so I first convert into a traditional data.frame, then move the name column into rownames.
+  data.frame() %>%
+  tibble::column_to_rownames('name') %>%
+  # Now, we can transpose the table, turning columns into rows and vice versa.
+  t() %>%
+  # Turn it into a data.frame and rename the Probe.ID column, which actually contains sample names
+  data.frame() %>%
+  rename(sample = Probe.ID)
+```
+
+# Intro
+
+# M & M
+
+# Results
+
+Look at the distribution of the small data
+(`r figr('small-boxplot', T, type = 'Figure')`).
+
+```{r small-boxplot, fig.cap = '**Distribution of small dataset.**'}
+# Plot the distribution of the small dataset (norm values) as a violin with a boxplot inside.
+small %>%
+  filter(ndet >= 8) %>%
+  ggplot(aes(x = sample, y = norm)) +
+  geom_violin() +
+  geom_boxplot(width = 0.1) +
+  # Log scale is easy to apply
+  scale_y_log10()
+```
+
+```{r}
+# Another way of showing distributions is with histograms
+small %>%
+  filter(ndet < 8) %>%
+  ggplot(aes(x = norm)) +
+  geom_histogram() +
+  facet_wrap(~sample)
+```
+
+```{r}
+# A simple NMDS ordination to see if samples separate
+
+# First, use Vegan's metaMDS() function to calculate the NMDS. It takes a matrix with samples as rows and items, in this case, probes
+# as columns.
+nmds <- big %>%
+  # Select the columns we need and log transform the norm values
+  transmute(probe = `Probe ID`, sample, lognorm = log10(norm)) %>%
+  # Make it wide, i.e. the matrix we need
+  pivot_wider(names_from = probe, values_from = lognorm) %>%
+  # We need to turn the sample names into "rownames"
+  data.frame() %>%
+  tibble::column_to_rownames('sample') %>%
+  # Call the metaMDS function with default values
+  vegan::metaMDS()
+
+# To plot the values, get the points vectors and turn into a data.frame
+data.frame(nmds$points) %>%
+  # Rownames are sample names, make explicit
+  tibble::rownames_to_column('sample') %>%
+  # Join in the samples to use variables for colouring and for shapes
+  inner_join(samples, by = 'sample') %>%
+  # Pipe into ggplot and plot as points.
+  ggplot(aes(x = MDS1, y = MDS2, colour = as.integer(Depth), shape = Station)) +
+  geom_point()
+```
+
+# Discussion
+
+# References

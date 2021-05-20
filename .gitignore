@@ -29,3 +29,5 @@ _cache
 .*.sw?
 .~*#
 *.html
+*_cache
+test.Rmd
