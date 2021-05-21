@@ -14,7 +14,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, fig.path='figures/', cache = TRUE)
+knitr::opts_chunk$set(echo = TRUE, fig.path='figures/')
 ```
 
 ```{r libraries, include = FALSE}
@@ -25,7 +25,7 @@ library(ggplot2)
 library(kfigr) # For the figr() function
 ```
 
-```{r read-data}
+```{r read-data, include = FALSE}
 # The below is quite convoluted. A much simpler solution would have been to just make sure the input tables were nicely formated for R.
 
 # Read the sheet called "SMALL_DATA" (experiment); specify a range to avoid extra header rows.
@@ -94,17 +94,20 @@ small %>%
   scale_y_log10()
 ```
 
-```{r}
+```{r small-histogram, fig.cap = '**Distribution of values for probes detected in fewer than eight samples.**'}
 # Another way of showing distributions is with histograms
 small %>%
   filter(ndet < 8) %>%
   ggplot(aes(x = norm)) +
-  geom_histogram() +
+  geom_histogram(bins = 30) +
   facet_wrap(~sample)
 ```
+In an NMDS analysis of the cruise data, samples separate by station but not by depth
+(`r figr('big-nmds-plot', T, type = 'Figure')`).
 
-```{r}
+```{r nmds, include = FALSE}
 # A simple NMDS ordination to see if samples separate
+# I'm doing the calculation in a separate block, with include = FALSE, to get rid of all the output that the metaMDS call generates.
 
 # First, use Vegan's metaMDS() function to calculate the NMDS. It takes a matrix with samples as rows and items, in this case, probes
 # as columns.
@@ -118,7 +121,10 @@ nmds <- big %>%
   tibble::column_to_rownames('sample') %>%
   # Call the metaMDS function with default values
   vegan::metaMDS()
+```
 
+
+```{r big-nmds-plot, fig.widht = 10, fig.height = 8, fig.cap = '**NMDS of log transformed normalized values from the cruise data.**'}
 # To plot the values, get the points vectors and turn into a data.frame
 data.frame(nmds$points) %>%
   # Rownames are sample names, make explicit
@@ -127,6 +133,8 @@ data.frame(nmds$points) %>%
   inner_join(samples, by = 'sample') %>%
   # Pipe into ggplot and plot as points.
   ggplot(aes(x = MDS1, y = MDS2, colour = as.integer(Depth), shape = Station)) +
+  # *Note* the warning one gets because we run out of shapes. One can define more shapes, but, as the warning message says, it becomes
+  # difficult to differentiate them. Let's talk more about this another time.
   geom_point()
 ```
 
